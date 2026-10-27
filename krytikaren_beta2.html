@@ -1,0 +1,1285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Крути Карен! Beta 2.0</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    :root {
+      --common: #808080;
+      --rare: #1e3c72;
+      --super: #ffd700;
+      --secret: #9b59b6;
+      --currency: #c0c0c0;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0f0f0f;
+      color: #fff;
+      font-family: 'Segoe UI', sans-serif;
+      min-height: 100vh;
+      padding-bottom: 50px;
+    }
+    #auth-screen, #player-auth, #admin-auth, #game, #admin-panel {
+      display: none;
+    }
+    .screen {
+      position: fixed; inset: 0;
+      background: #0a0a0a;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      gap: 14px;
+      z-index: 1000;
+    }
+    input, button, select {
+      padding: 12px 18px;
+      font-size: 16px;
+      border-radius: 8px;
+      border: none;
+      outline: none;
+    }
+    input {
+      background: #222;
+      color: #fff;
+      border: 2px solid #333;
+      width: 280px;
+      text-align: center;
+    }
+    button {
+      background: #1e3c72;
+      color: white;
+      cursor: pointer;
+      font-weight: bold;
+      transition: 0.2s;
+    }
+    button:hover { filter: brightness(1.15); }
+    button:disabled { background: #444; cursor: not-allowed; }
+
+    .container { max-width: 950px; margin: 0 auto; padding: 20px; }
+    .header { text-align: center; margin-bottom: 15px; }
+    .header h1 { font-size: 28px; }
+    .stats {
+      display: flex;
+      justify-content: center;
+      gap: 25px;
+      background: #1a1a1a;
+      padding: 12px 20px;
+      border-radius: 12px;
+      margin: 15px 0;
+      font-size: 17px;
+      flex-wrap: wrap;
+    }
+    .currency { color: var(--currency); font-weight: bold; }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin: 18px 0;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .tab-btn { background: #222; padding: 10px 20px; }
+    .tab-btn.active { background: #1e3c72; }
+
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    .cases-grid, .inventory-grid, .market-grid, .found-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 14px;
+      margin-top: 18px;
+    }
+    .card {
+      background: #1e1e1e;
+      border-radius: 12px;
+      padding: 12px;
+      text-align: center;
+      border: 2px solid #333;
+      position: relative;
+    }
+    .card img { width: 100px; height: 100px; object-fit: cover; border-radius: 8px; }
+    .card .name { font-size: 13px; margin: 8px 0 4px; font-weight: bold; }
+    .card .count {
+      position: absolute;
+      top: 8px; right: 8px;
+      background: rgba(0,0,0,0.75);
+      padding: 2px 7px;
+      border-radius: 6px;
+      font-size: 12px;
+      color: #ffd700;
+    }
+    .card button {
+      margin-top: 8px;
+      padding: 6px 12px;
+      font-size: 13px;
+      width: 100%;
+    }
+    .sell-btn { background: #c0392b; }
+    .buy-btn { background: #27ae60; }
+    .spin-case-btn { background: #1e3c72; }
+
+    .roulette-area {
+      display: none;
+      margin-top: 20px;
+      text-align: center;
+    }
+    .roulette-area.active { display: block; }
+    .spin-controls {
+      display: flex;
+      justify-content: center;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+    .spin-controls button {
+      padding: 8px 18px;
+      background: #333;
+    }
+    .spin-controls button.active { background: #1e3c72; }
+
+    .roulettes {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .roulette-wrapper {
+      position: relative;
+      width: 100%;
+      height: 130px;
+      background: #1a1a1a;
+      border: 3px solid #333;
+      border-radius: 12px;
+      overflow: hidden;
+    }
+    .pointer {
+      position: absolute;
+      top: 0;
+      width: 4px; height: 100%;
+      background: #ff3333;
+      z-index: 10;
+      box-shadow: 0 0 12px #ff3333;
+      transition: left 0.1s;
+    }
+    .roulette-tape {
+      display: flex;
+      position: absolute;
+      left: 0; top: 10px;
+      height: 110px;
+      will-change: transform;
+    }
+    .slot-card {
+      width: 90px; height: 110px;
+      margin: 0 5px;
+      background: #252525;
+      border-radius: 8px;
+      flex-shrink: 0;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      border-bottom: 5px solid #fff;
+      position: relative;
+    }
+    .slot-card img { width: 70px; height: 70px; object-fit: cover; border-radius: 6px; }
+    .slot-card.unknown img { filter: brightness(0.15); }
+    .slot-card .question {
+      position: absolute;
+      font-size: 42px;
+      color: #666;
+      font-weight: bold;
+      top: 25px;
+    }
+
+    .bg-common { border-bottom-color: var(--common) !important; }
+    .bg-rare { border-bottom-color: var(--rare) !important; }
+    .bg-super { border-bottom-color: var(--super) !important; }
+    .bg-secret { border-bottom-color: var(--secret) !important; }
+
+    /* Админка */
+    #admin-panel {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .admin-section {
+      background: #1a0a0a;
+      border: 2px solid #ff5555;
+      border-radius: 12px;
+      padding: 18px;
+      margin-bottom: 20px;
+    }
+    .admin-section h3 { color: #ff5555; margin-bottom: 12px; }
+    .admin-row {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .player-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: #222;
+      padding: 10px 14px;
+      border-radius: 8px;
+      margin-bottom: 8px;
+    }
+    .online-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 8px;
+    }
+    .online { background: #2ecc71; }
+    .offline { background: #777; }
+
+    /* Модалки */
+    .modal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.85);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 2000;
+    }
+    .modal-content {
+      background: #222;
+      padding: 28px;
+      border-radius: 16px;
+      text-align: center;
+      border: 3px solid #fff;
+      max-width: 420px;
+      width: 90%;
+    }
+    .modal-content img { width: 140px; height: 140px; object-fit: cover; border-radius: 12px; }
+
+    /* Трейд */
+    .trade-window {
+      background: #1a1a1a;
+      border: 2px solid #1e3c72;
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 700px;
+      margin: 20px auto;
+    }
+    .trade-sides {
+      display: flex;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+    .trade-side {
+      flex: 1;
+      min-width: 280px;
+      background: #222;
+      border-radius: 12px;
+      padding: 15px;
+    }
+    .trade-side h3 { margin-bottom: 10px; color: #ffd700; }
+    .trade-items {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      min-height: 100px;
+      margin: 10px 0;
+    }
+    .trade-item {
+      width: 70px;
+      text-align: center;
+      font-size: 11px;
+    }
+    .trade-item img { width: 60px; height: 60px; border-radius: 6px; }
+    .trade-money input { width: 100px; }
+
+    .version {
+      position: fixed;
+      bottom: 8px;
+      left: 0; right: 0;
+      text-align: center;
+      color: #555;
+      font-size: 13px;
+      z-index: 50;
+    }
+
+    .daily-banner {
+      background: linear-gradient(90deg, #1e3c72, #2a5298);
+      padding: 10px;
+      border-radius: 10px;
+      text-align: center;
+      margin-bottom: 15px;
+      display: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 1. Общий пароль -->
+  <div id="auth-screen" class="screen" style="display:flex">
+    <h2 style="color:#ffd700">Крути Карен! Beta 2.0</h2>
+    <input type="password" id="main-pass" placeholder="Пароль чести" autofocus>
+    <button onclick="checkMainPassword()">Войти</button>
+  </div>
+
+  <!-- 2. Вход игрока -->
+  <div id="player-auth" class="screen">
+    <h2>Вход / Регистрация игрока</h2>
+    <input type="text" id="player-login" placeholder="Логин">
+    <input type="password" id="player-password" placeholder="Пароль">
+    <button onclick="playerLogin()">Войти</button>
+    <button onclick="playerRegister()" style="background:#27ae60">Создать аккаунт</button>
+    <button onclick="backToMain()" style="background:#555;margin-top:10px">Назад</button>
+  </div>
+
+  <!-- 3. Вход админа -->
+  <div id="admin-auth" class="screen">
+    <h2 style="color:#ff5555">Вход администратора</h2>
+    <input type="text" id="admin-login" placeholder="Логин админа">
+    <input type="password" id="admin-password" placeholder="Пароль">
+    <button onclick="adminLogin()">Войти</button>
+    <button onclick="backToMain()" style="background:#555;margin-top:10px">Назад</button>
+  </div>
+
+  <!-- Игровая часть -->
+  <div class="container" id="game">
+    <div class="header">
+      <h1>Крути Карен!</h1>
+      <div style="color:#888;font-size:14px" id="current-login"></div>
+    </div>
+
+    <div class="daily-banner" id="daily-banner">
+      Ежедневная награда получена: +40 стандартных и +10 страшных кейсов!
+    </div>
+
+    <div class="stats">
+      <div class="currency">C <span id="money-val">0</span></div>
+      <div>📦 Найдено: <span id="found-val">0 / 0</span></div>
+    </div>
+
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('spin')">Крутить</button>
+      <button class="tab-btn" onclick="switchTab('market')">Рынок</button>
+      <button class="tab-btn" onclick="switchTab('inventory')">Инвентарь</button>
+      <button class="tab-btn" onclick="switchTab('found')">Найдено</button>
+      <button class="tab-btn" onclick="switchTab('trade')">Трейд</button>
+    </div>
+
+    <!-- Крутить -->
+    <div id="tab-spin" class="tab-content active">
+      <h2>Твои кейсы</h2>
+      <div class="cases-grid" id="cases-grid"></div>
+
+      <div class="roulette-area" id="roulette-area">
+        <h3 id="current-case-title">Крутим кейс</h3>
+        <div class="spin-controls">
+          <button class="mult-btn active" data-mult="1">x1</button>
+          <button class="mult-btn" data-mult="3">x3</button>
+          <button class="mult-btn" data-mult="5">x5</button>
+        </div>
+        <div class="roulettes" id="roulettes"></div>
+        <button class="spin-btn" id="real-spin-btn" onclick="doRealSpin()" style="margin-top:20px;padding:16px 50px;font-size:20px;">КРУТИТЬ</button>
+        <button onclick="closeRoulette()" style="background:#555;margin-top:10px;">Закрыть</button>
+      </div>
+    </div>
+
+    <!-- Рынок -->
+    <div id="tab-market" class="tab-content">
+      <h2>Рынок</h2>
+      <div class="market-grid" id="market-grid"></div>
+    </div>
+
+    <!-- Инвентарь -->
+    <div id="tab-inventory" class="tab-content">
+      <h2>Твой Инвентарь</h2>
+      <div class="inventory-grid" id="inventory-grid"></div>
+    </div>
+
+    <!-- Найдено -->
+    <div id="tab-found" class="tab-content">
+      <h2>Найдено <span id="found-count-title"></span></h2>
+      <div class="found-grid" id="found-grid"></div>
+    </div>
+
+    <!-- Трейд -->
+    <div id="tab-trade" class="tab-content">
+      <h2>Игроки онлайн</h2>
+      <div id="players-list"></div>
+      <div id="active-trade"></div>
+    </div>
+  </div>
+
+  <!-- Админ панель -->
+  <div id="admin-panel">
+    <h1 style="color:#ff5555; text-align:center; margin-bottom:20px;">Панель Главврача</h1>
+    <div style="text-align:center; margin-bottom:20px;">
+      <button onclick="adminLogout()" style="background:#c0392b">Выйти</button>
+    </div>
+
+    <div class="admin-section">
+      <h3>Игроки</h3>
+      <div id="admin-players-list">Загрузка...</div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Выдать / Забрать</h3>
+      <div class="admin-row">
+        <input type="text" id="admin-target-login" placeholder="Логин игрока" style="width:180px">
+        <select id="admin-item">
+          <option value="case_standard">Стандартный кейс</option>
+          <option value="case_scary">Страшный кейс</option>
+        </select>
+        <input type="number" id="admin-amount" value="1" min="1" style="width:80px">
+        <button onclick="adminGiveItem()">Выдать</button>
+        <button onclick="adminTakeItem()" style="background:#c0392b">Забрать</button>
+      </div>
+      <div class="admin-row">
+        <input type="number" id="admin-money" placeholder="Сумма C" style="width:140px">
+        <button onclick="adminGiveMoney()">Выдать деньги</button>
+        <button onclick="adminTakeMoney()" style="background:#c0392b">Забрать деньги</button>
+      </div>
+    </div>
+
+    <div class="admin-section">
+      <h3>Бан</h3>
+      <div class="admin-row">
+        <input type="text" id="ban-login" placeholder="Логин игрока" style="width:180px">
+        <input type="text" id="ban-reason" placeholder="Причина" style="width:200px">
+        <button onclick="adminBanAccount()" style="background:#c0392b">Бан аккаунта</button>
+        <button onclick="adminUnban()" style="background:#27ae60">Разбан</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Модалка выигрыша -->
+  <div id="win-modal" class="modal" onclick="closeModal()">
+    <div class="modal-content" id="modal-content">
+      <h2 id="win-tier">ВЫПАЛ!</h2>
+      <div id="win-images"></div>
+      <h3 id="win-name"></h3>
+      <p style="color:#888;font-size:13px">Кликни чтобы закрыть</p>
+    </div>
+  </div>
+
+  <!-- Модалка предложения трейда -->
+  <div id="trade-offer-modal" class="modal">
+    <div class="modal-content">
+      <h2 id="trade-offer-text">Игрок предлагает трейд</h2>
+      <div style="display:flex;gap:20px;justify-content:center;margin-top:20px;">
+        <button onclick="acceptTradeOffer()" style="background:#27ae60;font-size:28px;width:70px;height:70px;border-radius:50%;">✓</button>
+        <button onclick="declineTradeOffer()" style="background:#c0392b;font-size:28px;width:70px;height:70px;border-radius:50%;">✕</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="version">krytikaren_beta_2.0</div>
+
+<script>
+  // ================== SUPABASE ==================
+  const SUPABASE_URL = 'https://mcxyrqxxfrkeuigokrov.supabase.co';
+  const SUPABASE_KEY = 'sb_publishable_6rP-D6v4qFu0G8klWa-BzQ_mRTCtEH1';
+  const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+  // ================== АУДИО (вставь свои ссылки) ==================
+  const AUDIO = {
+    background: [
+      'file:///C:/Users/Георгий%20Великий/Downloads/RAUF_-_DETSTVO_feat_FAIK_-_kazhdyjj_raz_ya_vspominayu_detsvo_63908191.mp3', // трек 1
+      'file:///C:/Users/Георгий%20Великий/Downloads/Dlya_yutuba_-_onovaya_muzyka_63711960.mp3', // трек 2
+      'file:///C:/Users/Георгий%20Великий/Downloads/yutub_NLO_-_Inoplanetnaya_muzyka_60030347.mp3', // трек 3
+      'file:///C:/Users/Георгий%20Великий/Downloads/DJ_Bryanflow_-_Mil_pops_zhu_zhu_mil_pops_akh_kak_vkusno_nyam_nyam_70660523.mp3', // трек 4
+      'file:///C:/Users/Георгий%20Великий/Downloads/Evgenijj_Svetlanov_Gosudarstvennyjj_simfonicheskijj_orkestr_SSSR_Pjotr_Il_-_Lebedinoe_ozero_soch_20a_No_1_Scena_72032949.mp3'  // трек 5
+    ],
+    spinStart: 'file:///C:/Users/Георгий%20Великий/Downloads/go-new-gambling.mp3',
+    spinEnd: 'file:///C:/Users/Георгий%20Великий/Downloads/gambling.mp3',
+    click: 'file:///C:/Users/Георгий%20Великий/Downloads/cs_go-new-gamb.mp3'
+  };
+
+  // ================== ВСЕ КАРТИНКИ В ОДНОМ МЕСТЕ ==================
+  const KARENS = [
+    // COMMON
+    { id: 'common_karen', name: 'Обычный Карен', tier: 'common', img: 'https://i.yapx.ru/eS6WDb.jpg', case: 'standard' },
+    { id: 'alparen', name: 'Карен-альпарен', tier: 'common', img: 'https://i.yapx.ru/eS6WKb.jpg', case: 'standard' },
+    { id: 'kamren', name: 'Камрен', tier: 'common', img: 'https://i.yapx.ru/eUrRTb.jpg', case: 'standard' },
+    { id: 'alkaren', name: 'Алкарен', tier: 'common', img: 'https://i.yapx.ru/eUrSRb.jpg', case: 'standard' },
+    { id: 'pechkaren', name: 'Печкарен', tier: 'common', img: 'https://i.yapx.ru/eUrS4b.jpg', case: 'standard' },
+    { id: 'gopren', name: 'Гопрен', tier: 'common', img: 'https://via.placeholder.com/150?text=Гопрен', case: 'standard' },
+
+    // RARE
+    { id: 'karamelka', name: 'Каренка карамелька', tier: 'rare', img: 'https://i.yapx.ru/eS6V1b.jpg', case: 'standard' },
+    { id: 'boxren', name: 'Боксрен', tier: 'rare', img: 'https://i.yapx.ru/eS6VJb.jpg', case: 'standard' },
+    { id: 'skibidren', name: 'Скибидирен', tier: 'rare', img: 'https://i.yapx.ru/eUrTwb.jpg', case: 'standard' },
+    { id: 'harchoren', name: 'Харчорен', tier: 'rare', img: 'https://i.yapx.ru/eVDzR.jpg', case: 'standard' },
+    { id: 'volkren', name: 'Волкрен', tier: 'rare', img: 'https://i.yapx.ru/eVgIWb.jpg', case: 'standard' },
+    { id: 'baren', name: 'Барен', tier: 'rare', img: 'https://i.yapx.ru/eVgHIb.jpg', case: 'standard' },
+
+    // SUPER
+    { id: 'dobren', name: 'Добрен', tier: 'super', img: 'https://i.yapx.ru/eS6U4b.jpg', case: 'standard' },
+    { id: 'zloren', name: 'Злорен', tier: 'super', img: 'https://i.yapx.ru/eS6Uvb.jpg', case: 'standard' },
+    { id: 'tachkaren', name: 'Тачкарен', tier: 'super', img: 'https://i.yapx.ru/eVDvL.jpg', case: 'standard' },
+    { id: 'sigmaren', name: 'Сигмарен', tier: 'super', img: 'https://i.yapx.ru/eVDyJ.jpg', case: 'standard' },
+    { id: 'chipsoren', name: 'Чипсорен', tier: 'super', img: 'https://i.yapx.ru/eVgF5b.jpg', case: 'standard' },
+
+    // SECRET
+    { id: 'golden_karen', name: 'Golden Karen', tier: 'secret', img: 'https://i.yapx.ru/eS6Vib.jpg', case: 'standard' },
+    { id: 'primeren', name: 'Праймрен', tier: 'secret', img: 'https://i.yapx.ru/eUrWHb.jpg', case: 'standard' },
+
+    // СТРАШНЫЕ (scary case)
+    { id: 'oboroteren', name: 'Оборотерен', tier: 'common', img: 'https://i.yapx.ru/eVDz4.jpg', case: 'scary' },
+    { id: 'vedmren', name: 'Ведьмрен', tier: 'rare', img: 'https://i.yapx.ru/eUrTEb.jpg', case: 'scary' },
+    { id: 'tykvaren', name: 'Тыкварен', tier: 'rare', img: 'https://i.yapx.ru/eUrUUb.jpg', case: 'scary' },
+    { id: 'zmeikarenych', name: 'Змей Кареныч', tier: 'super', img: 'https://i.yapx.ru/eUrU7b.jpg', case: 'scary' },
+    { id: 'vampiren', name: 'Вампирен', tier: 'super', img: 'https://i.yapx.ru/eVgDJb.jpg', case: 'scary' },
+    { id: 'karkaren', name: 'Каркарен', tier: 'secret', img: 'https://i.yapx.ru/eVDyd.jpg', case: 'scary' }
+  ];
+
+  const CASES = {
+    case_standard: { id: 'case_standard', name: 'Стандартный кейс', img: 'https://i.yapx.ru/eVgKZb.jpg', buy: 25, sell: 20 },
+    case_scary:    { id: 'case_scary',    name: 'Страшный кейс',    img: 'https://i.yapx.ru/eVgKBb.jpg', buy: 50, sell: 40 }
+  };
+
+  const RARITY_CASES = {
+    common: { name: 'Common кейс', price: 30 },
+    rare:   { name: 'Rare кейс',   price: 80 },
+    super:  { name: 'Super кейс',  price: 600 },
+    secret: { name: 'Secret кейс', price: 120000 }
+  };
+
+  const SELL_PRICE = { common: 10, rare: 50, super: 500, secret: 100000 };
+
+  let currentUser = null;
+  let currentAdmin = null;
+  let inventory = {};          // karen_id / case_id -> amount
+  let discovered = new Set();  // id каренов, которые игрок открывал
+  let spinMultiplier = 1;
+  let currentCaseType = null;  // 'standard' или 'scary'
+  let pendingTrade = null;
+  let fingerprint = localStorage.getItem('karen_fp') || Math.random().toString(36).slice(2);
+  localStorage.setItem('karen_fp', fingerprint);
+
+  // ================== АУДИО ХЕЛПЕРЫ ==================
+  let bgAudio = null;
+  let bgIndex = 0;
+
+  function playSound(key) {
+    if (!AUDIO[key]) return;
+    const a = new Audio(AUDIO[key]);
+    a.volume = 0.4;
+    a.play().catch(()=>{});
+  }
+
+  function playClick() { playSound('click'); }
+
+  function startBackgroundMusic() {
+    if (!AUDIO.background[0]) return;
+    if (bgAudio) bgAudio.pause();
+    bgAudio = new Audio(AUDIO.background[bgIndex]);
+    bgAudio.volume = 0.25;
+    bgAudio.play().catch(()=>{});
+    bgAudio.onended = () => {
+      bgIndex = (bgIndex + 1) % AUDIO.background.length;
+      startBackgroundMusic();
+    };
+  }
+
+  // ================== ВХОД ==================
+  function checkMainPassword() {
+    playClick();
+    const pass = document.getElementById('main-pass').value;
+    if (pass === 'karen2026') {
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('player-auth').style.display = 'flex';
+    } else if (pass === 'admren24546_1234') {
+      document.getElementById('auth-screen').style.display = 'none';
+      document.getElementById('admin-auth').style.display = 'flex';
+    } else {
+      alert('Неверный пароль чести!');
+    }
+  }
+
+  function backToMain() {
+    playClick();
+    document.getElementById('player-auth').style.display = 'none';
+    document.getElementById('admin-auth').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
+
+  async function playerRegister() {
+    playClick();
+    const login = document.getElementById('player-login').value.trim();
+    const password = document.getElementById('player-password').value;
+    if (!login || !password) return alert('Заполни логин и пароль');
+
+    const { data: existing } = await supabase.from('players').select('id').eq('login', login).maybeSingle();
+    if (existing) return alert('Такой логин уже занят');
+
+    const { error } = await supabase.from('players').insert({
+      login, password, money: 0, last_daily_claim: null
+    });
+    if (error) return alert('Ошибка: ' + error.message);
+    alert('Аккаунт создан! Теперь войди.');
+  }
+
+  async function playerLogin() {
+    playClick();
+    const login = document.getElementById('player-login').value.trim();
+    const password = document.getElementById('player-password').value;
+
+    const { data, error } = await supabase.from('players')
+      .select('*')
+      .eq('login', login)
+      .eq('password', password)
+      .maybeSingle();
+
+    if (error || !data) return alert('Неверный логин или пароль');
+    if (data.is_banned) return alert('Аккаунт заблокирован: ' + (data.ban_reason || ''));
+
+    currentUser = data;
+    await supabase.from('players').update({
+      last_online: new Date().toISOString(),
+      fingerprint
+    }).eq('id', currentUser.id);
+
+    document.getElementById('player-auth').style.display = 'none';
+    document.getElementById('game').style.display = 'block';
+    document.getElementById('current-login').innerText = 'Аккаунт: ' + currentUser.login;
+
+    await loadInventory();
+    await loadDiscovered();
+    await checkDailyReward();
+    updateUI();
+    renderCases();
+    startOnlineHeartbeat();
+    startBackgroundMusic();
+    listenTradeOffers();
+  }
+
+  // ================== ЕЖЕДНЕВНАЯ НАГРАДА ==================
+  async function checkDailyReward() {
+    const now = Date.now();
+    const last = currentUser.last_daily_claim ? new Date(currentUser.last_daily_claim).getTime() : 0;
+    if (now - last >= 24 * 60 * 60 * 1000) {
+      // выдаём 40 стандартных + 10 страшных
+      await addToInventory('case_standard', 40);
+      await addToInventory('case_scary', 10);
+      await supabase.from('players').update({
+        last_daily_claim: new Date().toISOString()
+      }).eq('id', currentUser.id);
+      currentUser.last_daily_claim = new Date().toISOString();
+      document.getElementById('daily-banner').style.display = 'block';
+      setTimeout(() => document.getElementById('daily-banner').style.display = 'none', 8000);
+    }
+  }
+
+  // ================== ИНВЕНТАРЬ & DISCOVERED ==================
+  async function loadInventory() {
+    const { data } = await supabase.from('inventory')
+      .select('*')
+      .eq('player_id', currentUser.id);
+    inventory = {};
+    (data || []).forEach(item => inventory[item.karen_id] = item.amount);
+  }
+
+  async function loadDiscovered() {
+    const { data } = await supabase.from('discovered')
+      .select('karen_id')
+      .eq('player_id', currentUser.id);
+    discovered = new Set((data || []).map(d => d.karen_id));
+  }
+
+  async function addToInventory(id, amount = 1) {
+    const newAmount = (inventory[id] || 0) + amount;
+    inventory[id] = newAmount;
+    await supabase.from('inventory').upsert({
+      player_id: currentUser.id,
+      karen_id: id,
+      amount: newAmount
+    }, { onConflict: 'player_id,karen_id' });
+  }
+
+  async function removeFromInventory(id, amount = 1) {
+    const newAmount = Math.max(0, (inventory[id] || 0) - amount);
+    if (newAmount <= 0) {
+      delete inventory[id];
+      await supabase.from('inventory').delete()
+        .eq('player_id', currentUser.id)
+        .eq('karen_id', id);
+    } else {
+      inventory[id] = newAmount;
+      await supabase.from('inventory').upsert({
+        player_id: currentUser.id,
+        karen_id: id,
+        amount: newAmount
+      }, { onConflict: 'player_id,karen_id' });
+    }
+  }
+
+  async function markDiscovered(karenId) {
+    if (discovered.has(karenId)) return;
+    discovered.add(karenId);
+    await supabase.from('discovered').upsert({
+      player_id: currentUser.id,
+      karen_id: karenId
+    }, { onConflict: 'player_id,karen_id' });
+  }
+
+  // ================== UI ==================
+  function switchTab(tab) {
+    playClick();
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    event.target.classList.add('active');
+    document.getElementById('tab-' + tab).classList.add('active');
+
+    if (tab === 'inventory') renderInventory();
+    if (tab === 'market') renderMarket();
+    if (tab === 'found') renderFound();
+    if (tab === 'trade') loadPlayersForTrade();
+    if (tab === 'spin') renderCases();
+  }
+
+  function updateUI() {
+    document.getElementById('money-val').innerText = (currentUser.money || 0).toLocaleString();
+    const totalKarens = KARENS.length;
+    document.getElementById('found-val').innerText = discovered.size + ' / ' + totalKarens;
+  }
+
+  // ================== КЕЙСЫ (вкладка Крутить) ==================
+  function renderCases() {
+    const grid = document.getElementById('cases-grid');
+    grid.innerHTML = '';
+    ['case_standard', 'case_scary'].forEach(cid => {
+      const amount = inventory[cid] || 0;
+      if (amount <= 0) return;
+      const c = CASES[cid];
+      const pool = KARENS.filter(k => k.case === (cid === 'case_standard' ? 'standard' : 'scary'));
+      const foundInCase = pool.filter(k => discovered.has(k.id)).length;
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div class="count">x${amount}</div>
+        <img src="${c.img}">
+        <div class="name">${c.name}</div>
+        <div style="font-size:12px;color:#aaa">${foundInCase}/${pool.length}</div>
+        <button class="spin-case-btn" onclick="openCaseSpin('${cid}')">Крутить</button>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  function openCaseSpin(caseId) {
+    playClick();
+    currentCaseType = caseId === 'case_standard' ? 'standard' : 'scary';
+    document.getElementById('current-case-title').innerText = CASES[caseId].name;
+    document.getElementById('roulette-area').classList.add('active');
+    spinMultiplier = 1;
+    document.querySelectorAll('.mult-btn').forEach(b => b.classList.remove('active'));
+    document.querySelector('.mult-btn[data-mult="1"]').classList.add('active');
+    buildRoulettes();
+  }
+
+  function closeRoulette() {
+    playClick();
+    document.getElementById('roulette-area').classList.remove('active');
+  }
+
+  // множители
+  document.querySelectorAll('.mult-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      playClick();
+      document.querySelectorAll('.mult-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      spinMultiplier = parseInt(btn.dataset.mult);
+      buildRoulettes();
+    });
+  });
+
+  function buildRoulettes() {
+    const container = document.getElementById('roulettes');
+    container.innerHTML = '';
+    for (let i = 0; i < spinMultiplier; i++) {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'roulette-wrapper';
+      wrapper.innerHTML = `<div class="pointer" id="pointer-${i}"></div><div class="roulette-tape" id="tape-${i}"></div>`;
+      container.appendChild(wrapper);
+      buildTape(i);
+    }
+  }
+
+  function getWeightedKaren(caseType) {
+    const pool = KARENS.filter(k => k.case === caseType);
+    const rand = Math.random() * 100;
+    let tier;
+    if (rand < 1) tier = 'secret';
+    else if (rand < 5) tier = 'super';
+    else if (rand < 20) tier = 'rare';
+    else tier = 'common';
+
+    let candidates = pool.filter(k => k.tier === tier);
+    if (candidates.length === 0) candidates = pool.filter(k => k.tier === 'common');
+    if (candidates.length === 0) candidates = pool;
+    return candidates[Math.floor(Math.random() * candidates.length)];
+  }
+
+  function buildTape(index) {
+    const tape = document.getElementById(`tape-${index}`);
+    tape.style.transition = 'none';
+    tape.style.transform = 'translateX(0)';
+    tape.innerHTML = '';
+
+    // 80% common визуально в ленте
+    for (let i = 0; i < 50; i++) {
+      let k;
+      const r = Math.random() * 100;
+      if (r < 80) k = KARENS.filter(x => x.tier === 'common' && x.case === currentCaseType)[0] || KARENS[0];
+      else if (r < 95) k = KARENS.filter(x => x.tier === 'rare')[Math.floor(Math.random()*5)] || KARENS[0];
+      else if (r < 99) k = KARENS.filter(x => x.tier === 'super')[Math.floor(Math.random()*3)] || KARENS[0];
+      else k = KARENS.filter(x => x.tier === 'secret')[0] || KARENS[0];
+
+      // иногда подсовываем реальный
+      if (Math.random() < 0.3) k = getWeightedKaren(currentCaseType);
+      tape.appendChild(createSlotCard(k));
+    }
+  }
+
+  function createSlotCard(karen) {
+    const div = document.createElement('div');
+    div.className = 'slot-card bg-' + karen.tier;
+    const isKnown = discovered.has(karen.id);
+    if (isKnown) {
+      div.innerHTML = `<img src="${karen.img}" alt="">`;
+    } else {
+      div.classList.add('unknown');
+      div.innerHTML = `<img src="${karen.img}" alt=""><div class="question">?</div>`;
+    }
+    return div;
+  }
+
+  async function doRealSpin() {
+    playClick();
+    const caseId = currentCaseType === 'standard' ? 'case_standard' : 'case_scary';
+    if ((inventory[caseId] || 0) < spinMultiplier) return alert('Недостаточно кейсов!');
+
+    playSound('spinStart');
+    document.getElementById('real-spin-btn').disabled = true;
+
+    // забираем кейсы
+    await removeFromInventory(caseId, spinMultiplier);
+
+    const prizes = [];
+    for (let i = 0; i < spinMultiplier; i++) {
+      const prize = getWeightedKaren(currentCaseType);
+      prizes.push(prize);
+
+      const tape = document.getElementById(`tape-${i}`);
+      buildTape(i);
+
+      // ставим приз примерно на 35-й позиции
+      const prizeIndex = 35 + Math.floor(Math.random() * 3);
+      if (tape.children[prizeIndex]) {
+        tape.replaceChild(createSlotCard(prize), tape.children[prizeIndex]);
+      }
+
+      // иногда почти-выпадение (иллюзия)
+      if (Math.random() < 0.35) {
+        const near = KARENS.filter(k => k.tier === 'secret' || k.tier === 'super')[Math.floor(Math.random()*4)];
+        if (near && tape.children[prizeIndex - 1]) {
+          tape.replaceChild(createSlotCard(near), tape.children[prizeIndex - 1]);
+        }
+      }
+
+      setTimeout(() => {
+        const cardWidth = 100;
+        const wrapper = tape.parentElement;
+        const offset = (Math.random() - 0.5) * 40; // смещение ползунка
+        const pointer = document.getElementById(`pointer-${i}`);
+        if (pointer) pointer.style.left = `calc(50% + ${offset}px)`;
+
+        tape.style.transition = 'transform 4.2s cubic-bezier(0.12, 0.8, 0.2, 1)';
+        const stopPos = -(prizeIndex * cardWidth) + (wrapper.offsetWidth / 2) - 50 + offset;
+        tape.style.transform = `translateX(${stopPos}px)`;
+      }, 60);
+    }
+
+    setTimeout(async () => {
+      for (const p of prizes) {
+        await addToInventory(p.id, 1);
+        await markDiscovered(p.id);
+      }
+      playSound('spinEnd');
+      showWinModal(prizes);
+      document.getElementById('real-spin-btn').disabled = false;
+      updateUI();
+      renderCases();
+    }, 4500);
+  }
+
+  function showWinModal(prizes) {
+    document.getElementById('win-tier').innerText = prizes.length > 1 ? `ВЫПАЛО x${prizes.length}` : prizes[0].tier.toUpperCase();
+    document.getElementById('win-name').innerText = prizes.map(p => p.name).join(', ');
+    document.getElementById('win-images').innerHTML = prizes.map(p =>
+      `<img src="${p.img}" style="width:90px;height:90px;margin:4px;border-radius:8px">`
+    ).join('');
+    document.getElementById('win-modal').style.display = 'flex';
+  }
+
+  function closeModal() {
+    document.getElementById('win-modal').style.display = 'none';
+  }
+
+  // ================== РЫНОК ==================
+  function renderMarket() {
+    const grid = document.getElementById('market-grid');
+    grid.innerHTML = '';
+
+    // Кейсы
+    Object.values(CASES).forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <img src="${c.img}">
+        <div class="name">${c.name}</div>
+        <div style="color:var(--currency)">${c.buy} C</div>
+        <button class="buy-btn" onclick="buyCase('${c.id}')">Купить</button>
+      `;
+      grid.appendChild(card);
+    });
+
+    // Кейсы редкости
+    ['common', 'rare', 'super', 'secret'].forEach(tier => {
+      const owned = KARENS.filter(k => k.tier === tier && discovered.has(k.id)).length;
+      const total = KARENS.filter(k => k.tier === tier).length;
+      const rc = RARITY_CASES[tier];
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML = `
+        <div style="font-size:40px;margin:20px 0;">?</div>
+        <div class="name">${rc.name}</div>
+        <div style="font-size:12px;color:#aaa">${owned}/${total} найдено</div>
+        <div style="color:var(--currency)">${rc.price} C</div>
+        <button class="buy-btn" onclick="buyRarityCase('${tier}')">Купить</button>
+      `;
+      grid.appendChild(card);
+    });
+  }
+
+  async function buyCase(caseId) {
+    playClick();
+    const c = CASES[caseId];
+    if (currentUser.money < c.buy) return alert('Недостаточно C!');
+    currentUser.money -= c.buy;
+    await supabase.from('players').update({ money: currentUser.money }).eq('id', currentUser.id);
+    await addToInventory(caseId, 1);
+    updateUI();
+    alert('Кейс куплен!');
+    renderCases();
+  }
+
+  async function buyRarityCase(tier) {
+    playClick();
+    const rc = RARITY_CASES[tier];
+    if (currentUser.money < rc.price) return alert('Недостаточно C!');
+    currentUser.money -= rc.price;
+    await supabase.from('players').update({ money: currentUser.money }).eq('id', currentUser.id);
+
+    // равный шанс среди всех каренов этой редкости
+    const pool = KARENS.filter(k => k.tier === tier);
+    const prize = pool[Math.floor(Math.random() * pool.length)];
+    await addToInventory(prize.id, 1);
+    await markDiscovered(prize.id);
+    updateUI();
+    showWinModal([prize]);
+  }
+
+  // ================== ИНВЕНТАРЬ ==================
+  function renderInventory() {
+    const grid = document.getElementById('inventory-grid');
+    grid.innerHTML = '';
+
+    // сначала кейсы
+    ['case_standard', 'case_scary'].forEach(cid => {
+      if ((inventory[cid] || 0) > 0) {
+        const c = CASES[cid];
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="count">x${inventory[cid]}</div>
+          <img src="${c.img}">
+          <div class="name">${c.name}</div>
+          <div style="color:var(--currency)">${c.sell} C</div>
+          <button class="sell-btn" onclick="sellItem('${cid}')">Продать</button>
+        `;
+        grid.appendChild(card);
+      }
+    });
+
+    // карены
+    KARENS.forEach(k => {
+      if ((inventory[k.id] || 0) > 0) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <div class="count">x${inventory[k.id]}</div>
+          <img src="${k.img}">
+          <div class="name">${k.name}</div>
+          <div style="color:var(--currency)">${SELL_PRICE[k.tier]} C</div>
+          <button class="sell-btn" onclick="sellItem('${k.id}')">Продать</button>
+        `;
+        grid.appendChild(card);
+      }
+    });
+  }
+
+  async function sellItem(id) {
+    playClick();
+    if (!inventory[id] || inventory[id] <= 0) return;
+    let price = 0;
+    if (CASES[id]) price = CASES[id].sell;
+    else {
+      const k = KARENS.find(x => x.id === id);
+      price = SELL_PRICE[k.tier];
+    }
+    await removeFromInventory(id, 1);
+    currentUser.money += price;
+    await supabase.from('players').update({ money: currentUser.money }).eq('id', currentUser.id);
+    updateUI();
+    renderInventory();
+  }
+
+  // ================== НАЙДЕНО ==================
+  function renderFound() {
+    const grid = document.getElementById('found-grid');
+    grid.innerHTML = '';
+    document.getElementById('found-count-title').innerText = `(${discovered.size} / ${KARENS.length})`;
+
+    KARENS.forEach(k => {
+      if (discovered.has(k.id)) {
+        const card = document.createElement('div');
+        card.className = 'card';
+        card.innerHTML = `
+          <img src="${k.img}">
+          <div class="name">${k.name}</div>
+          <div style="font-size:12px;color:var(--${k.tier})">${k.tier}</div>
+        `;
+        grid.appendChild(card);
+      }
+    });
+  }
+
+  // ================== ТРЕЙД ==================
+  async function loadPlayersForTrade() {
+    const { data } = await supabase.from('players')
+      .select('id, login, last_online')
+      .neq('id', currentUser.id)
+      .order('last_online', { ascending: false });
+
+    const list = document.getElementById('players-list');
+    list.innerHTML = '';
+    (data || []).forEach(p => {
+      const isOnline = (new Date() - new Date(p.last_online)) < 90000;
+      const div = document.createElement('div');
+      div.className = 'player-row';
+      div.innerHTML = `
+        <div>
+          <span class="online-dot ${isOnline ? 'online' : 'offline'}"></span>
+          ${p.login}
+        </div>
+        <button onclick="sendTradeRequest('${p.id}', '${p.login}')">Предложить трейд</button>
+      `;
+      list.appendChild(div);
+    });
+  }
+
+  async function sendTradeRequest(targetId, targetLogin) {
+    playClick();
+    await supabase.from('trade_requests').insert({
+      from_id: currentUser.id,
+      from_login: currentUser.login,
+      to_id: targetId,
+      status: 'pending'
+    });
+    alert('Предложение отправлено игроку ' + targetLogin);
+  }
+
+  function listenTradeOffers() {
+    // простой polling каждые 5 сек
+    setInterval(async () => {
+      if (!currentUser) return;
+      const { data } = await supabase.from('trade_requests')
+        .select('*')
+        .eq('to_id', currentUser.id)
+        .eq('status', 'pending')
+        .limit(1);
+      if (data && data.length) {
+        pendingTrade = data[0];
+        document.getElementById('trade-offer-text').innerText = `${pendingTrade.from_login} предлагает вам трейд`;
+        document.getElementById('trade-offer-modal').style.display = 'flex';
+      }
+    }, 5000);
+  }
+
+  async function acceptTradeOffer() {
+    playClick();
+    document.getElementById('trade-offer-modal').style.display = 'none';
+    if (!pendingTrade) return;
+    await supabase.from('trade_requests').update({ status: 'accepted' }).eq('id', pendingTrade.id);
+    // здесь можно открыть полноценное окно обмена
+    alert('Трейд принят! (полноценный интерфейс обмена деньгами и каренами будет в следующем патче — сейчас заглушка)');
+    pendingTrade = null;
+  }
+
+  async function declineTradeOffer() {
+    playClick();
+    document.getElementById('trade-offer-modal').style.display = 'none';
+    if (!pendingTrade) return;
+    await supabase.from('trade_requests').update({ status: 'declined' }).eq('id', pendingTrade.id);
+    pendingTrade = null;
+  }
+
+  function startOnlineHeartbeat() {
+    setInterval(async () => {
+      if (currentUser) {
+        await supabase.from('players').update({
+          last_online: new Date().toISOString()
+        }).eq('id', currentUser.id);
+      }
+    }, 30000);
+  }
+
+  // ================== АДМИНКА ==================
+  async function adminLogin() {
+    playClick();
+    const login = document.getElementById('admin-login').value.trim();
+    const password = document.getElementById('admin-password').value;
+    const { data, error } = await supabase.from('admins')
+      .select('*')
+      .eq('login', login)
+      .eq('password', password)
+      .maybeSingle();
+    if (error || !data) return alert('Неверный логин или пароль');
+    currentAdmin = data;
+    document.getElementById('admin-auth').style.display = 'none';
+    document.getElementById('admin-panel').style.display = 'block';
+    loadAdminPlayers();
+  }
+
+  function adminLogout() {
+    playClick();
+    currentAdmin = null;
+    document.getElementById('admin-panel').style.display = 'none';
+    document.getElementById('auth-screen').style.display = 'flex';
+  }
+
+  async function loadAdminPlayers() {
+    const { data } = await supabase.from('players').select('*').order('last_online', { ascending: false });
+    const container = document.getElementById('admin-players-list');
+    container.innerHTML = '';
+    (data || []).forEach(p => {
+      const isOnline = (new Date() - new Date(p.last_online)) < 90000;
+      const div = document.createElement('div');
+      div.className = 'player-row';
+      div.innerHTML = `
+        <div>
+          <span class="online-dot ${isOnline ? 'online' : 'offline'}"></span>
+          <strong>${p.login}</strong> — C ${p.money}
+          ${p.is_banned ? '<span style="color:#ff5555">[БАН]</span>' : ''}
+        </div>
+      `;
+      container.appendChild(div);
+    });
+  }
+
+  async function getPlayerByLogin(login) {
+    const { data } = await supabase.from('players').select('*').eq('login', login).maybeSingle();
+    return data;
+  }
+
+  async function adminGiveItem() {
+    const login = document.getElementById('admin-target-login').value.trim();
+    const item = document.getElementById('admin-item').value;
+    const amount = parseInt(document.getElementById('admin-amount').value) || 1;
+    const player = await getPlayerByLogin(login);
+    if (!player) return alert('Игрок не найден');
+
+    // упрощённо — напрямую в inventory
+    const { data: inv } = await supabase.from('inventory')
+      .select('*')
+      .eq('player_id', player.id)
+      .eq('karen_id', item)
+      .maybeSingle();
+    const newAmount = (inv?.amount || 0) + amount;
+    await supabase.from('inventory').upsert({
+      player_id: player.id,
+      karen_id: item,
+      amount: newAmount
+    }, { onConflict: 'player_id,karen_id' });
+    alert('Выдано!');
+    loadAdminPlayers();
+  }
+
+  async function adminTakeItem() {
+    const login = document.getElementById('admin-target-login').value.trim();
+    const item = document.getElementById('admin-item').value;
+    const amount = parseInt(document.getElementById('admin-amount').value) || 1;
+    const player = await getPlayerByLogin(login);
+    if (!player) return alert('Игрок не найден');
+
+    const { data: inv } = await supabase.from('inventory')
+      .select('*')
+      .eq('player_id', player.id)
+      .eq('karen_id', item)
+      .maybeSingle();
+    if (!inv || inv.amount < amount) return alert('Недостаточно');
+    const newAmount = inv.amount - amount;
+    if (newAmount <= 0) {
+      await supabase.from('inventory').delete().eq('id', inv.id);
+    } else {
+      await supabase.from('inventory').update({ amount: newAmount }).eq('id', inv.id);
+    }
+    alert('Забрано!');
+  }
+
+  async function adminGiveMoney() {
+    const login = document.getElementById('admin-target-login').value.trim();
+    const amount = parseInt(document.getElementById('admin-money').value);
+    if (!amount) return;
+    const player = await getPlayerByLogin(login);
+    if (!player) return alert('Игрок не найден');
+    await supabase.from('players').update({ money: player.money + amount }).eq('id', player.id);
+    alert('Деньги выданы!');
+    loadAdminPlayers();
+  }
+
+  async function adminTakeMoney() {
+    const login = document.getElementById('admin-target-login').value.trim();
+    const amount = parseInt(document.getElementById('admin-money').value);
+    if (!amount) return;
+    const player = await getPlayerByLogin(login);
+    if (!player) return alert('Игрок не найден');
+    await supabase.from('players').update({ money: Math.max(0, player.money - amount) }).eq('id', player.id);
+    alert('Деньги забраны!');
+    loadAdminPlayers();
+  }
+
+  async function adminBanAccount() {
+    const login = document.getElementById('ban-login').value.trim();
+    const reason = document.getElementById('ban-reason').value.trim();
+    const player = await getPlayerByLogin(login);
+    if (!player) return alert('Игрок не найден');
+    await supabase.from('players').update({ is_banned: true, ban_reason: reason || 'Без причины' }).eq('id', player.id);
+    alert('Забанен!');
+    loadAdminPlayers();
+  }
+
+  async function adminUnban() {
+    const login = document.getElementById('ban-login').value.trim();
+    const player = await getPlayerByLogin(login);
+    if (!player) return alert('Игрок не найден');
+    await supabase.from('players').update({ is_banned: false, ban_reason: null }).eq('id', player.id);
+    alert('Разбанен!');
+    loadAdminPlayers();
+  }
+</script>
+</body>
+</html>
